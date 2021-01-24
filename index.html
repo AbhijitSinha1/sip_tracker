@@ -59,12 +59,11 @@
       <div class="row">
         <table class="table table-striped table-dark">
           <thead class="">
-            <th>SlNo</th>
             <th>Mutual Fund</th>
-            <th>ISIN</th>
             <th>Start Date</th>
-            <th>SIP</th>
+            <th>Investment</th>
             <th>Cycle</th>
+            <th>Units</th>
             <th>Increment</th>
           </thead>
           <tbody id="tBody"></tbody>
@@ -97,6 +96,9 @@
       const ISINURL =
         "https://nsdl.co.in/downloadables/html/hold-mutual-fund-units.html";
 
+      const MILLISECONDS_IN_A_DAY = 24 * 3600 * 1000;
+      const YEARS = MILLISECONDS_IN_A_DAY * 365;
+
       const ISINMAP = {},
         NAMEMAP = {};
       fetch(ISINURL, { mode: "cors" })
@@ -122,6 +124,12 @@
 
       let rowCount = 0;
 
+      const getDuration = (startDate) => {
+        const diff =
+          new Date().getFullYear() - new Date(startDate).getFullYear() + 1;
+        return (diff > 5 ? 5 : diff) + "Y";
+      };
+
       const showGraph = async () => {
         startLoadingGif();
 
@@ -135,15 +143,18 @@
           const startDate = $(`#startdate_${i + 1}`).val();
           const sip = $(`#sip_${i + 1}`).val();
           const cycle = $(`#cycle_${i + 1}`).val();
+          const units = $(`#units_${i + 1}`).val();
           const increment = $(`#increment_${i + 1}`).val();
-          if (!isin) {
+          if (!isin || !name) {
             continue;
           }
-          mf.push({ name, isin, startDate, sip, cycle, increment });
+
+          const duration = getDuration(startDate);
+          mf.push({ name, isin, startDate, sip, cycle, units, increment });
 
           navUrl.push(
             fetch(
-              `https://www.moneycontrol.com/mc/widget/mfnavonetimeinvestment/get_chart_value?isin=${isin}&dur=1Y&ind_id=26&classic=true&type=benchmark&investmentType=Equity`
+              `https://www.moneycontrol.com/mc/widget/mfnavonetimeinvestment/get_chart_value?isin=${isin}&dur=${duration}&ind_id=26&classic=true&type=benchmark&investmentType=Equity`
             )
               .then((z) => z.json())
               .then((z) => z.g1)
@@ -151,6 +162,11 @@
         }
 
         window.localStorage.setItem("DATA", JSON.stringify(mf));
+
+        if (mf.length == 0) {
+          stopLoadingGif();
+          return;
+        }
 
         const investments = await Promise.all(navUrl).then((navs) => {
           const data = {};
@@ -160,6 +176,7 @@
               mf[i].sip,
               mf[i].startDate,
               mf[i].cycle,
+              mf[i].units,
               mf[i].increment
             );
           }
@@ -179,6 +196,7 @@
         });
 
         const keys = Object.keys(investments);
+        keys.sort();
         const lastDate = keys[keys.length - 1];
         const diff =
           investments[lastDate].value - investments[lastDate].invested;
@@ -236,13 +254,12 @@
         $("#chartSection").addClass("visible");
       };
 
-      const MILLISECONDS_IN_A_DAY = 24 * 3600 * 1000;
-
       const computeCycleDuration = {
         Weekly: MILLISECONDS_IN_A_DAY * 7,
         Monthly: MILLISECONDS_IN_A_DAY * 30,
         Quarterly: MILLISECONDS_IN_A_DAY * 120,
         Yearly: MILLISECONDS_IN_A_DAY * 365,
+        Once: MILLISECONDS_IN_A_DAY * Infinity,
       };
 
       const buildInvestmentData = function (
@@ -250,8 +267,13 @@
         sip,
         startDate,
         cycle,
+        units,
         increment
       ) {
+        if (!Array.isArray(navHistory)) {
+          return [];
+        }
+
         let total = 0,
           invested = 0;
         const result = [];
@@ -267,22 +289,27 @@
             }
           }
 
-          if (invested == 0) {
-            continue;
-          }
           result.push({
             date: navDate,
             invested,
             value: navValueAdjusted * total,
           });
         }
+
+        // if (total == 0 && units == 0) {
+        //   continue;
+        // } else if (total == 0 && cycle == "Once") {
+        //   total = +units;
+        //   invested = +sip;
+        // }
+
         return result;
       };
 
       $("#addRowBtn").on("click", () => {
         rowCount++;
 
-        const html = `<tr><td>${rowCount}.</td><td><input id="name_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input id="isin_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input id="startdate_${rowCount}" class="form-control datepicker" style="background-color: black; color: whitesmoke" /><span class="input-group-addon"><i class="glyphicon glyphicon-th"></i></span></td><td><input id="sip_${rowCount}" type="number" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><select id="cycle_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" ><option value="Weekly">Weekly</option><option value="Monthly" selected>Monthly</option><option value="Quarterly">Quarterly</option><option value="Yearly">Yearly</option></select></td><td><input id="increment_${rowCount}" type="number" step="0.1" class="form-control" style="background-color: black; color: whitesmoke" value="0" /></td></tr>`;
+        const html = `<tr><td><input id="name_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td class="invisible"><input id="isin_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input id="startdate_${rowCount}" class="form-control datepicker" style="background-color: black; color: whitesmoke" /><span class="input-group-addon"><i class="glyphicon glyphicon-th"></i></span></td><td><input id="sip_${rowCount}" type="number" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><select id="cycle_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" ><option value="Weekly">Weekly</option><option value="Monthly" selected>Monthly</option><option value="Quarterly">Quarterly</option><option value="Yearly">Yearly</option><option value="Once">One Time</option></select></td><td><input id="units_${rowCount}" type="number" class="form-control" style="background-color: black; color: whitesmoke" value="" /></td><td><input id="increment_${rowCount}" type="number" step="0.1" class="form-control" style="background-color: black; color: whitesmoke" value="0" /></td></tr>`;
 
         $("#tBody").append(html);
         $(".datepicker").datepicker({});
@@ -291,18 +318,13 @@
           minLength: 3,
           delay: 1000,
         });
-        $(`#isin_${rowCount}`).on("focus", () => {
+        $(`#name_${rowCount}`).focusout(() => {
           const name = $(`#name_${rowCount}`).val();
           if (name) {
             const isin = ISINMAP[name];
             $(`#isin_${rowCount}`).val(isin);
-          }
-        });
-        $(`#name_${rowCount}`).on("focus", () => {
-          const isin = $(`#isin_${rowCount}`).val();
-          if (isin) {
-            const name = NAMEMAP[isin];
-            $(`#name_${rowCount}`).val(name);
+          } else {
+            $(`#isin_${rowCount}`).val("");
           }
         });
       });
@@ -315,9 +337,9 @@
         for (const d of data) {
           rowCount++;
 
-          const html = `<tr><td>${rowCount}.</td><td><input value="${
+          const html = `<tr><td><input value="${
             d.name
-          }" id="name_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input value="${
+          }" id="name_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td class="invisible"><input value="${
             d.isin
           }" id="isin_${rowCount}" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input value="${
             d.startDate
@@ -333,7 +355,11 @@
             d.cycle == "Quarterly" ? "selected" : ""
           } value="Quarterly">Quarterly</option><option ${
             d.cycle == "Yearly" ? "selected" : ""
-          } value="Yearly">Yearly</option></select></td><td><input value="${
+          } value="Yearly">Yearly</option><option ${
+            d.cycle == "Once" ? "selected" : ""
+          } value="Once">One Time</option></select></td><td><input value="${
+            d.units
+          }" id="units_${rowCount}" type="number" class="form-control" style="background-color: black; color: whitesmoke" /></td><td><input value="${
             d.increment
           }" id="increment_${rowCount}" type="number" step="0.1" class="form-control" style="background-color: black; color: whitesmoke" /></td></tr>`;
           $("#tBody").append(html);
@@ -343,18 +369,13 @@
             minLength: 3,
             delay: 1000,
           });
-          $(`#isin_${rowCount}`).on("focus", () => {
+          $(`#name_${rowCount}`).focusout(() => {
             const name = $(`#name_${rowCount}`).val();
             if (name) {
               const isin = ISINMAP[name];
               $(`#isin_${rowCount}`).val(isin);
-            }
-          });
-          $(`#name_${rowCount}`).on("focus", () => {
-            const isin = $(`#isin_${rowCount}`).val();
-            if (isin) {
-              const name = NAMEMAP[isin];
-              $(`#name_${rowCount}`).val(name);
+            } else {
+              $(`#isin_${rowCount}`).val("");
             }
           });
         }
