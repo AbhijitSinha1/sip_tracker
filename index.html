@@ -109,7 +109,15 @@
       </div>
       <div class="row invisible" id="chartSection">
         <div id="chart" style="background-color: whitesmoke"></div>
-        <h1 id="PnL" class="col-sm-12"></h1>
+        <div class="row">
+          <h1
+            id="investedValue"
+            class="col-sm-4"
+            style="color: whitesmoke"
+          ></h1>
+          <h1 id="currentValue" class="col-sm-4" style="color: whitesmoke"></h1>
+          <h1 id="PnL" class="col-sm-4"></h1>
+        </div>
       </div>
     </div>
     <script>
@@ -225,6 +233,12 @@
           plPercent =
             Math.round((pl * 10000) / investments[lastDate].invested) / 100;
 
+        $("#investedValue").text(
+          `Rs. ${Math.round(investments[lastDate].invested * 100) / 100}`
+        );
+        $("#currentValue").text(
+          `Rs. ${Math.round(investments[lastDate].value * 100) / 100}`
+        );
         $("#PnL").text(`Rs. ${pl} (${plPercent}%)`);
 
         $("#PnL").addClass(diff > 0 ? "profit" : "loss");
